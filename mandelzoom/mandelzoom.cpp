@@ -1,6 +1,5 @@
-/*-------------------------------------------------------*/
-/*  CS-378                  Computer Graphics              Tom Ellman    */
-/*-----------------------------------------------------------------------*/
+
+*-----------------------------------------------------------------------*/
 /*  mandelzoom.cpp   Draw a picture of the Mandelbrot set.               */
 /*-----------------------------------------------------------------------*/
 
@@ -34,6 +33,8 @@ struct rectangle
 // Statically allocated and initialized at start up.
 list<rectangle*>  rectList;
 list<rectangle*>::iterator  rectListIter;
+int rectListIndex;
+
 
 // Variables represeting the view region requested by user.
 double xmin, xmax, ymin, ymax;
@@ -92,7 +93,7 @@ bool rubberBanding = false, bandOn = false;
 
 
 int iter() {
-	return (int)1000 * exp(-(xmax - xmin - 4)/10);
+	return (int)1000;// *exp(-(xmax - xmin - 4) / 10);
 }
 
 
@@ -325,7 +326,6 @@ void mouse(int button, int state, int x, int y)
 		{
 
 			// Remove the rubber band currently on the screen.
-			double ratio =  (double) windowHeight/ windowWidth;
 
 			drawRubberBand(xAnchor, yAnchor, xStretch, yStretch);
 			bandOn = false;
@@ -333,30 +333,46 @@ void mouse(int button, int state, int x, int y)
 			
 			cout << "zoom\n";
 
+			//window prams
+			double ddx = xStretch - xAnchor;
+			double ddy = yStretch - yAnchor;
+			double ratio = (double) windowHeight / windowWidth;
+			//complex plane prams
+			double cdx = xmax-xmin;
+			double cdy = ymax-ymin;
+	
+			if (abs(ddy) / abs(ddx) < ratio) {//increase cy
+				xmax = ((double)max(xAnchor, xStretch) / windowWidth) * cdx + xmin;
+				xmin = ((double)min(xAnchor, xStretch) / windowWidth) * cdx + xmin;
 
-			double diffX = xmax-xmin;
-			double diffY = ymax-ymin;
-			double xm = xmin;
-			double ym = ymin;
-			
-			xmin = ((double) min(xAnchor, xStretch) / windowWidth)* diffX + xm;
-			xmax = ((double) max(xAnchor, xStretch) / windowWidth) * diffX + xm;
+				double centerCY = ((double)((yAnchor + yStretch)/2) / windowHeight) * cdy + ymin;
+				double intCY = (double) (xmax - xmin) * ratio / 2;
 
-			double yr = ratio * abs(xStretch - xAnchor);
-			if (yAnchor <= yStretch) {
-				ymin = yAnchor * diffY / windowHeight + ym;
-				ymax = (yAnchor + yr) * diffY / windowHeight + ym;
-			} else {
-				ymax = yAnchor * diffY / windowHeight + ym;
-				ymin = (yAnchor -yr) * diffY / windowHeight + ym;
+				ymin = centerCY - intCY;
+				ymax = centerCY + intCY;
+			}
+			else {
+				ymax = ((double)max(yAnchor, yStretch) / windowHeight) * cdy + ymin;
+				ymin = ((double)min(yAnchor, yStretch) / windowHeight) * cdy + ymin;
+
+				double centerCX = ((double)(xAnchor + xStretch) / (2 * windowWidth)) * cdx + xmin;
+				double intCX = (double) (ymax - ymin) / (2* ratio);
+
+				xmin = centerCX - intCX;
+				xmax = centerCX + intCX;
 			}
 			
-			//ymin = min(yAnchor, yStretch) * diffY / windowHeight + ym;
-			//ymax = min(yAnchor, yStretch) * diffY / windowHeight + ym;
-			//cout << xmin << " " << xmax << "\n";
-			//cout << (xmax-xmax)/(ymax-ymin) << "\n";
-			
 			recompute = true; 
+
+			if (rectListIndex + 1 != rectList.size()) {
+				auto it = rectList.begin();
+				std::advance(it, rectListIndex + 1);
+				rectList.erase(it, rectList.end());
+			}
+
+			rectList.push_back(new rectangle(xmin, ymin, xmax, ymax));
+
+			rectListIndex += 1;
 
 			glutPostRedisplay();
 			break;
@@ -369,17 +385,45 @@ void mouse(int button, int state, int x, int y)
 void mainMenu(int item)
 // Callback for processing main menu.
 {
+	int i = 0;
+
 	switch (item)
 	{
 	case 1: // Push
-		
-		rectList.push_front(new rectangle(xmin, ymin, xmax, ymax));
-
+		if (rectListIndex + 1 < rectList.size()) {
+			for (auto it = rectList.begin(); it != rectList.end(); it++) {
+				if (i == rectListIndex + 1) {
+					rectangle* rec = *it;
+					xmax = (*rec).xmax;
+					xmin = rec->xmin;
+					ymax = rec->ymax;
+					ymin = rec->ymin;
+					recompute = true;
+					glutPostRedisplay();
+				}
+				i += 1;
+			}
+			rectListIndex += 1;
+		}
 		break;
-	case 2: // Pop
-		
-		//rectangle* rec = (rectangle*) rectList.pop_front();
-		
+	case 2: // Pop (go back one in the list)
+		if (rectListIndex != 0) {
+			for (auto it = rectList.begin(); it != rectList.end() ; it++) {
+				if (i == rectListIndex - 1) {
+					rectangle* rec = *it;
+					xmax = (*rec).xmax;
+					xmin = rec->xmin;
+					ymax = rec->ymax;
+					ymin = rec->ymin;
+					recompute = true;
+					glutPostRedisplay();
+
+				}
+				i += 1;
+
+			}
+			rectListIndex -= 1;
+		}
 		break;
 	case 3: std::exit(0);
 	}
@@ -399,13 +443,13 @@ int main(int argc, char* argv[])
 {
 	// Process command line parameters and convert
 	// them from string to int or float.
-	xmin = -2;// atof(argv[1]);
-	xmax = 2;// atof(argv[2]);
-	ymin = -2;// atof(argv[3]);
-	ymax = 2;// atof(argv[4]);
+	xmin = atof(argv[1]);
+	xmax = atof(argv[2]);
+	ymin = atof(argv[3]);
+	ymax = atof(argv[4]);
 
-	windowWidth = 400;// atoi(argv[5]);
-	windowHeight = 400;// atoi(argv[6]);
+	windowWidth = atoi(argv[5]);
+	windowHeight = atoi(argv[6]);
 
 	// Initialize the dynamically allocated tables after
 	// main function has begun. 
@@ -415,7 +459,7 @@ int main(int argc, char* argv[])
 	// to reference the first and only rectangle on the list. 
 	rectList.push_front(new rectangle(xmin, ymin, xmax, ymax));
 	rectListIter = rectList.begin();
-
+	rectListIndex = 0;
 
 	// Mask floating point exceptions.
 	_control87(MCW_EM, MCW_EM);
